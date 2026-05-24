@@ -98,4 +98,4 @@ The system returns:
 
 - Python 3.10+
 - Brave Search API key
-- Ollama (optional)
+- Ollama - llama3.1:latest model
