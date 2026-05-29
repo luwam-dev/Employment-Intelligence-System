@@ -15,45 +15,38 @@ The system uses search results, text extraction, matching algorithms, and option
 - Export results to Excel
 - Optional Ollama LLM support
 
-## Project Structure
+# Getting Started
 
-```text
-Employment-Intelligence-System
-│
-├── src
-│   ├── cli.py
-│   ├── pipeline.py
-│   ├── config.py
-│   ├── discovery.py
-│   ├── extractor.py
-│   ├── llm_processor.py
-│   ├── matcher.py
-│   ├── models.py
-│   └── scorer.py
-│
-├── data
-├── outputs
-├── .env
-├── .gitignore
-├── requirements.txt
-└── README.md
+## Requirements
+
+- Python 3.10+
+- [Brave Search API key](https://brave.com/search/api/) 
+- [Ollama](https://ollama.com/) and the nodel [llama3.1:latest](https://ollama.com/library/llama3.1) model
+
+## Setup and Installation 
+
+### 1. Clone the repo 
+``` bash
+git clone https://github.com/luwam-dev/Employment-Intelligence-System.git
+```
+### 2. Change directory as so:
+``` bash
+cd Employment-Intelligence-System
 ```
 
-## Installation
+### 3. Setup .env file
+Create a `.env` file:
+``` env
+BRAVE_SEARCH_API_KEY=your_brave_api_key
+```
 
-Install required packages:
+### 4. Install required packages:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Create a `.env` file:
-
-```text
-BRAVE_SEARCH_API_KEY=your_api_key
-```
-
-## Run
+## Usage
 
 ### Search one person
 
@@ -79,7 +72,34 @@ python -m src.cli data/Trial_1.xlsx
 python -m src.cli data/Trial_1.xlsx outputs/results.xlsx
 ```
 
-## Output
+## Expected Data Input:
+> [!IMPORTANT]
+>  Save your `.xlsx` file inside the `data` folder.
+## Project Structure
+
+```text
+Employment-Intelligence-System
+│
+├── src
+│   ├── cli.py
+│   ├── pipeline.py
+│   ├── config.py
+│   ├── discovery.py
+│   ├── extractor.py
+│   ├── llm_processor.py
+│   ├── matcher.py
+│   ├── models.py
+│   └── scorer.py
+│
+├── data
+├── outputs
+├── .env
+├── .gitignore
+├── requirements.txt
+└── README.md
+```
+
+### Output
 
 The system returns:
 
@@ -93,9 +113,3 @@ The system returns:
 - Employment score
 - Final score
 - Source URL
-
-## Requirements
-
-- Python 3.10+
-- Brave Search API key
-- Ollama - llama3.1:latest model
