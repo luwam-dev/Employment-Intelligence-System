@@ -1,11 +1,16 @@
 def clamp_score(score):
+    try:
+        score = float(score)
+    except (TypeError, ValueError):
+        return 0.0
+
     if score < 0:
         return 0.0
 
     if score > 1:
         return 1.0
 
-    return float(score)
+    return score
 
 
 def combine_scores(

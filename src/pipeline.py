@@ -1,5 +1,3 @@
-from typing import Any
-
 import pandas as pd
 
 from src.discovery import Student, discover_candidates

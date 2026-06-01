@@ -18,6 +18,7 @@ class Settings:
     max_candidates: int = 8
     search_pause_seconds: float = 0.2
 
+    # Matching thresholds used to decide whether a profile is reliable enough.
     min_person_match_score: float = 0.50
     min_employment_evidence_score: float = 0.15
     min_final_score_for_profile: float = 0.50
@@ -25,5 +26,4 @@ class Settings:
     min_llm_confidence_for_accept: float = 0.40
 
 
-settings = Settings()
-SETTINGS = settings
+SETTINGS = Settings()

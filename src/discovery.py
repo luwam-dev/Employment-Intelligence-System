@@ -37,19 +37,19 @@ class CandidatePage:
     discovery_score: float = 0.0
 
 
-def clean_text(value):
+def clean_text(value: object) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip())
 
 
-def normalize_text(value):
+def normalize_text(value: object) -> str:
     return clean_text(value).lower()
 
 
-def compact_name(value):
+def compact_name(value: object) -> str:
     return re.sub(r"[^a-zA-Z0-9]+", "", str(value or "").lower())
 
 
-def unique_values(values: Iterable[str]):
+def unique_values(values: Iterable[str]) -> list[str]:
     seen = set()
     output = []
 
@@ -63,32 +63,33 @@ def unique_values(values: Iterable[str]):
     return output
 
 
-def build_search_queries(student: Student):
+def build_search_queries(student: Student) -> list[str]:
     first_name = clean_text(student.first_name)
     last_name = clean_text(student.last_name)
     full_name = clean_text(student.full_name)
     compact = compact_name(full_name)
 
+    name = clean_text(f"{first_name} {last_name}") or full_name
+
     queries = [
-        f"{first_name} {last_name} linkedin",
-        f'"{first_name} {last_name}" linkedin',
-        f"{first_name} {last_name} github",
+        f"{name} linkedin",
+        f'"{name}" linkedin',
+        f"{name} github",
         f"{full_name} linkedin",
         f'site:linkedin.com/in "{full_name}"',
-        f'site:linkedin.com/in "{first_name} {last_name}"',
+        f'site:linkedin.com/in "{name}"',
         f"{compact} linkedin",
     ]
 
     return unique_values(queries)
 
 
-def looks_like_bad_result(url, title, snippet):
+def looks_like_bad_result(url: str, title: str, snippet: str) -> bool:
     text = f"{url} {title} {snippet}".lower()
 
     blocked_words = [
         "login",
         "sign in",
-        "directory",
         "people search",
     ]
 
@@ -98,7 +99,7 @@ def looks_like_bad_result(url, title, snippet):
     return any(word in text for word in blocked_words)
 
 
-def get_page_type(url):
+def get_page_type(url: str) -> str:
     url = url.lower()
 
     if "linkedin.com/in/" in url:
@@ -110,7 +111,7 @@ def get_page_type(url):
     return "generic"
 
 
-def score_candidate(student: Student, candidate: CandidatePage):
+def score_candidate(student: Student, candidate: CandidatePage) -> float:
     text = normalize_text(
         f"{candidate.title} {candidate.snippet} {candidate.url}"
     )
@@ -120,22 +121,22 @@ def score_candidate(student: Student, candidate: CandidatePage):
     if normalize_text(student.full_name) in text:
         score += 1.5
 
-    if student.first_name and student.first_name.lower() in text:
+    if student.first_name and normalize_text(student.first_name) in text:
         score += 0.3
 
-    if student.last_name and student.last_name.lower() in text:
+    if student.last_name and normalize_text(student.last_name) in text:
         score += 0.5
 
-    if "linkedin.com/in/" in candidate.url:
+    if "linkedin.com/in/" in candidate.url.lower():
         score += 1.0
 
-    if "github.com/" in candidate.url:
+    if "github.com/" in candidate.url.lower():
         score += 0.5
 
     return score
 
 
-def search_brave(query, count=10):
+def search_brave(query: str, count: int = 10) -> list[CandidatePage]:
     api_key = os.getenv("BRAVE_SEARCH_API_KEY", "").strip()
 
     if not api_key:
@@ -143,13 +144,8 @@ def search_brave(query, count=10):
 
     response = requests.get(
         BRAVE_SEARCH_URL,
-        params={
-            "q": query,
-            "count": count,
-        },
-        headers={
-            "X-Subscription-Token": api_key,
-        },
+        params={"q": query, "count": count},
+        headers={"X-Subscription-Token": api_key},
         timeout=20,
     )
 
@@ -163,10 +159,7 @@ def search_brave(query, count=10):
         title = item.get("title", "")
         snippet = item.get("description", "")
 
-        if not url:
-            continue
-
-        if looks_like_bad_result(url, title, snippet):
+        if not url or looks_like_bad_result(url, title, snippet):
             continue
 
         results.append(
@@ -181,7 +174,9 @@ def search_brave(query, count=10):
     return results
 
 
-def remove_duplicate_candidates(candidates):
+def remove_duplicate_candidates(
+    candidates: list[CandidatePage],
+) -> list[CandidatePage]:
     unique = {}
 
     for candidate in candidates:
@@ -193,10 +188,10 @@ def remove_duplicate_candidates(candidates):
 
 def discover_candidates(
     student: Student,
-    max_search_results=8,
-    max_candidates=10,
-    sleep_seconds=0.2,
-):
+    max_search_results: int = 8,
+    max_candidates: int = 10,
+    sleep_seconds: float = 0.2,
+) -> list[CandidatePage]:
     queries = build_search_queries(student)
 
     print(f"   Queries: {len(queries)}")
@@ -213,24 +208,28 @@ def discover_candidates(
             candidates.extend(results)
             time.sleep(sleep_seconds)
 
-        except Exception as error:
-            print(f"   Search error: {error}")
+        except requests.RequestException as error:
+            print(f"   Search request failed: {error}")
+
+        except RuntimeError as error:
+            print(f"   Search setup error: {error}")
+            break
 
     candidates = remove_duplicate_candidates(candidates)
 
     for candidate in candidates:
         candidate.discovery_score = score_candidate(student, candidate)
 
-    candidates.sort(
-        key=lambda candidate: candidate.discovery_score,
-        reverse=True,
-    )
-
     candidates = [
         candidate
         for candidate in candidates
         if candidate.discovery_score > 0.5
     ]
+
+    candidates.sort(
+        key=lambda candidate: candidate.discovery_score,
+        reverse=True,
+    )
 
     candidates = candidates[:max_candidates]
 

@@ -1,6 +1,8 @@
 import json
+import re
+from typing import Any
 
-from ollama import chat
+from ollama import ResponseError, chat
 
 from src.config import SETTINGS
 
@@ -34,7 +36,7 @@ Profile text:
 """.strip()
 
 
-def empty_result():
+def empty_result() -> dict[str, str | float]:
     return {
         "company": "",
         "role": "",
@@ -44,7 +46,7 @@ def empty_result():
     }
 
 
-def clamp_confidence(value):
+def clamp_confidence(value: Any) -> float:
     try:
         confidence = float(value or 0)
     except (TypeError, ValueError):
@@ -59,9 +61,28 @@ def clamp_confidence(value):
     return confidence
 
 
-def parse_llm_response(raw_response):
+def extract_json_text(raw_response: str) -> str:
+    raw_response = raw_response.strip()
+
+    if raw_response.startswith("{") and raw_response.endswith("}"):
+        return raw_response
+
+    match = re.search(r"\{.*\}", raw_response, flags=re.DOTALL)
+    if match:
+        return match.group(0)
+
+    return ""
+
+
+def parse_llm_response(raw_response: str) -> dict[str, str | float]:
+    json_text = extract_json_text(raw_response)
+
+    if not json_text:
+        print("   Ollama returned no JSON")
+        return empty_result()
+
     try:
-        data = json.loads(raw_response)
+        data = json.loads(json_text)
     except json.JSONDecodeError:
         print("   Ollama returned invalid JSON")
         return empty_result()
@@ -75,7 +96,7 @@ def parse_llm_response(raw_response):
     }
 
 
-def extract_with_llm(name, text):
+def extract_with_llm(name: object, text: object) -> dict[str, str | float]:
     name = str(name or "").strip()
     text = str(text or "").strip()
 
@@ -84,7 +105,7 @@ def extract_with_llm(name, text):
 
     prompt = PROMPT_TEMPLATE.format(
         name=name,
-        text=text[:SETTINGS.max_text_for_llm],
+        text=text[: SETTINGS.max_text_for_llm],
     )
 
     try:
@@ -99,11 +120,16 @@ def extract_with_llm(name, text):
             format="json",
         )
 
-    except Exception as error:
-        print(f"   Ollama request failed: {error}")
+    except ResponseError as error:
+        print(f"   Ollama response error: {error}")
         return empty_result()
 
-    raw_response = str(response.message.content or "").strip()
+    except ConnectionError as error:
+        print(f"   Could not connect to Ollama: {error}")
+        return empty_result()
+
+    content = getattr(response.message, "content", "")
+    raw_response = str(content or "").strip()
 
     if not raw_response:
         return empty_result()

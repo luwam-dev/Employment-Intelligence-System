@@ -5,23 +5,19 @@ import pandas as pd
 
 from src.discovery import Student
 from src.pipeline import (
-    process_student,
-    detect_columns,
-    build_student_from_row,
-    ensure_output_columns,
     apply_result_to_dataframe,
+    build_student_from_row,
+    detect_columns,
+    ensure_output_columns,
+    process_student,
 )
 
 
 DEFAULT_UNIVERSITY = "Brunel University London"
 
 
-def print_cli_info(args):
+def print_cli_info():
     print("Welcome to the Employment Intelligence System\n")
-    print("Total arguments:", len(sys.argv))
-    print("Script name:", sys.argv[0])
-    print("Arguments:", args)
-    print()
 
 
 def clean_output(value):
@@ -86,45 +82,53 @@ def print_result(result):
 
 
 def print_results_table(results):
-    columns = [
-        ("Input Name", "input_name", 18),
-        ("Matched Name", "matched_name", 18),
-        ("Role", "role", 20),
-        ("Company", "company", 28),
-        ("Location", "location", 26),
-        ("Status", "match_status", 16),
-        ("Person", "person_match_score", 8),
-        ("Employ", "employment_evidence_score", 8),
-        ("Final", "final_score", 8),
-        ("Source URL", "source_url", 42),
-    ]
+    print("\nFinal Results\n")
 
-    line = "+"
+    if not results:
+        print("No results found.")
+        return
 
-    for _, _, width in columns:
-        line += "-" * (width + 2) + "+"
+    for index, result in enumerate(results, start=1):
+        print("=" * 70)
+        print(f"Result {index}")
+        print("=" * 70)
 
-    print("\nFinal Results Table\n")
-    print(line)
+        rows = [
+            ("Input name", result.get("input_name")),
+            ("Matched name", result.get("matched_name")),
+            ("Role", result.get("role")),
+            ("Company", result.get("company")),
+            ("Location", result.get("location")),
+            ("Status", result.get("match_status")),
+            ("Person score", result.get("person_match_score")),
+            ("Employment score", result.get("employment_evidence_score")),
+            ("Final score", result.get("final_score")),
+            ("Source title", result.get("source_title")),
+            ("Source URL", result.get("source_url")),
+        ]
 
-    header = "|"
+        for label, value in rows:
+            print(f"{label:<18}: {clean_output(value)}")
 
-    for heading, _, width in columns:
-        header += f" {heading:<{width}} |"
+        print()
 
-    print(header)
-    print(line)
 
-    for result in results:
-        row = "|"
+def process_excel_rows(df):
+    detected = detect_columns(df)
+    results = []
 
-        for _, key, width in columns:
-            value = shorten(result.get(key), width)
-            row += f" {value:<{width}} |"
+    for idx, row in df.iterrows():
+        student = build_student_from_row(
+            row=row,
+            row_index=idx,
+            detected=detected,
+            default_university=DEFAULT_UNIVERSITY,
+        )
 
-        print(row)
+        result = process_student(student)
+        results.append((idx, result))
 
-    print(line)
+    return results
 
 
 def search_single_names():
@@ -146,45 +150,31 @@ def search_single_names():
 
 
 def search_excel_file(input_file):
+    if not input_file.exists():
+        print("Input file not found:", input_file)
+        return
+
     df = pd.read_excel(input_file, dtype=object)
-    detected = detect_columns(df)
-
-    results = []
-
-    for idx, row in df.iterrows():
-        student = build_student_from_row(
-            row=row,
-            row_index=idx,
-            detected=detected,
-            default_university=DEFAULT_UNIVERSITY,
-        )
-
-        result = process_student(student)
-        results.append(result)
+    indexed_results = process_excel_rows(df)
+    results = [result for _, result in indexed_results]
 
     print_results_table(results)
 
 
 def search_excel_file_and_save(input_file, output_file):
+    if not input_file.exists():
+        print("Input file not found:", input_file)
+        return
+
     df = pd.read_excel(input_file, dtype=object)
     df = ensure_output_columns(df)
 
-    detected = detect_columns(df)
-    results = []
+    indexed_results = process_excel_rows(df)
 
-    for idx, row in df.iterrows():
-        student = build_student_from_row(
-            row=row,
-            row_index=idx,
-            detected=detected,
-            default_university=DEFAULT_UNIVERSITY,
-        )
-
-        result = process_student(student)
-        results.append(result)
-
+    for idx, result in indexed_results:
         apply_result_to_dataframe(df, idx, result)
 
+    results = [result for _, result in indexed_results]
     print_results_table(results)
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -202,7 +192,7 @@ def show_usage():
 
 def main():
     args = sys.argv[1:]
-    print_cli_info(args)
+    print_cli_info()
 
     if len(args) == 0:
         search_single_names()

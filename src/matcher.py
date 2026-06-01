@@ -27,6 +27,8 @@ LOCATION_PATTERNS = [
     r"([A-Z][A-Za-z\-\s]+,\s*[A-Z][A-Za-z\-\s]+)",
 ]
 
+TITLE_SEPARATORS = r"\s+[\|\-\u2013\u00b7]\s+"
+
 
 @dataclass
 class MatchResult:
@@ -47,35 +49,36 @@ class MatchResult:
     match_status: str = "not_found"
 
 
-def clean_text(value):
+def clean_text(value: object) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip())
 
 
-def split_title(title):
+def split_title(title: object) -> list[str]:
+    title = clean_text(title)
+
     if not title:
         return []
 
-    parts = re.split(r"\s+[|\-–·]\s+", title)
-    return [clean_text(part) for part in parts if clean_text(part)]
+    parts = re.split(TITLE_SEPARATORS, title)
+    return [part for part in parts if part]
 
 
-def get_name_tokens(name):
+def get_name_tokens(name: object) -> list[str]:
     return re.findall(r"[a-z]+", normalize_text(name))
 
 
-def calculate_token_overlap(student, text):
+def calculate_token_overlap(student: Student, text: object) -> float:
     student_tokens = set(get_name_tokens(student.full_name))
     text_tokens = set(get_name_tokens(text))
 
     if not student_tokens:
-        return 0
+        return 0.0
 
     overlap = len(student_tokens & text_tokens)
-
     return overlap / len(student_tokens)
 
 
-def calculate_person_score(student, candidate):
+def calculate_person_score(student: Student, candidate: CandidatePage) -> float:
     blob = clean_text(
         f"{candidate.title} "
         f"{candidate.snippet} "
@@ -85,7 +88,7 @@ def calculate_person_score(student, candidate):
 
     blob = normalize_text(blob)
 
-    score = 0
+    score = 0.0
 
     full_name = normalize_text(student.full_name)
     first_name = normalize_text(student.first_name)
@@ -105,7 +108,7 @@ def calculate_person_score(student, candidate):
     return round(min(score, 1.0), 4)
 
 
-def extract_role(text):
+def extract_role(text: object) -> str:
     text = clean_text(text)
 
     for role in ROLE_KEYWORDS:
@@ -115,7 +118,7 @@ def extract_role(text):
     return ""
 
 
-def extract_company(title, student):
+def extract_company(title: object, student: Student) -> str:
     parts = split_title(title)
 
     if len(parts) < 2:
@@ -132,7 +135,7 @@ def extract_company(title, student):
     return ""
 
 
-def extract_location(text):
+def extract_location(text: object) -> str:
     text = clean_text(text)
 
     for pattern in LOCATION_PATTERNS:
@@ -144,7 +147,10 @@ def extract_location(text):
     return ""
 
 
-def get_employment_fields(student, candidate):
+def get_employment_fields(
+    student: Student,
+    candidate: CandidatePage,
+) -> tuple[str, str, str, str]:
     title = clean_text(candidate.title)
     snippet = clean_text(candidate.snippet)
     text = clean_text(candidate.text)
@@ -161,12 +167,11 @@ def get_employment_fields(student, candidate):
 
 
 def calculate_employment_score(
-    candidate,
-    company,
-    role,
-    location,
-):
-    score = 0
+    company: str,
+    role: str,
+    location: str,
+) -> float:
+    score = 0.0
 
     if company:
         score += 0.45
@@ -180,23 +185,24 @@ def calculate_employment_score(
     return round(min(score, 1.0), 4)
 
 
-def match_candidate(student, candidate):
+def get_match_status(final_score: float) -> str:
+    if final_score >= 0.80:
+        return "matched"
+
+    if final_score >= 0.55:
+        return "possible_match"
+
+    return "not_found"
+
+
+def match_candidate(student: Student, candidate: CandidatePage) -> MatchResult:
     company, role, location, evidence = get_employment_fields(
         student,
         candidate,
     )
 
-    person_score = calculate_person_score(
-        student,
-        candidate,
-    )
-
-    employment_score = calculate_employment_score(
-        candidate,
-        company,
-        role,
-        location,
-    )
+    person_score = calculate_person_score(student, candidate)
+    employment_score = calculate_employment_score(company, role, location)
 
     final_score = round(
         min(
@@ -207,15 +213,6 @@ def match_candidate(student, candidate):
         ),
         4,
     )
-
-    if final_score >= 0.80:
-        status = "matched"
-
-    elif final_score >= 0.55:
-        status = "possible_match"
-
-    else:
-        status = "not_found"
 
     return MatchResult(
         matched_name=student.full_name,
@@ -229,23 +226,21 @@ def match_candidate(student, candidate):
         location=location,
         evidence=evidence,
         confidence=final_score,
-        match_status=status,
+        match_status=get_match_status(final_score),
     )
 
 
-def select_best_match(student, candidates):
+def select_best_match(
+    student: Student,
+    candidates: list[CandidatePage],
+) -> MatchResult:
     if not candidates:
         return MatchResult()
 
-    results = []
-
-    for candidate in candidates:
-        results.append(
-            match_candidate(
-                student,
-                candidate,
-            )
-        )
+    results = [
+        match_candidate(student, candidate)
+        for candidate in candidates
+    ]
 
     results.sort(
         key=lambda result: result.final_score,
